@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+
+if [[ $# -eq 1 ]]; then
+  selected_dir=$1 # must be full path
+
+  if [[ -z $selected_dir ]]; then
+    echo "No directory selected."
+    exit 1
+  fi
+else
+  dir_list=$(find ~/.config ~/work ~/personal -mindepth 1 -maxdepth 1 -type d)
+  # strip $HOME from directories
+  homeless_dir_list=$(echo "$dir_list" | sed "s|$HOME|~|g")
+  # fzf for choosing dir
+  homeless_selected_dir=$(echo "$homeless_dir_list" | fzf)
+
+  if [[ -z $homeless_selected_dir ]]; then
+    echo "No directory selected."
+    exit 1
+  fi
+  # add back $HOME for full path
+  selected_dir="$HOME$(echo "$homeless_selected_dir" | cut -c 2-)"
+fi
+
+
+# no . allowed, replace with _
+name=$(basename "$selected_dir" | tr . _)
+# limit to 8 chars
+selected_name=${name:0:8}
+
+tmux_running=$(pgrep tmux)
+
+if ! tmux has-session -t $selected_name 2> /dev/null; then
+  # create detached session
+  tmux new-session -c $selected_dir -s $selected_name -d
+fi
+
+if [ -n "$TMUX" ] && [ -n "$tmux_running" ]; then
+  # in tmux: switch to selected
+  tmux switch-client -t $selected_name
+  exit 0
+fi
+
+# open tmux on selected
+tmux attach-session -t $selected_name
